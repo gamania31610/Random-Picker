@@ -1,52 +1,66 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>自動偵測隨機抽選系統</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>自動同步隨機抽籤系統</title>
+    <!-- SVG Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎁</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 強制單頁鎖死，禁止任何捲動 */
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+<body class="bg-gray-900 text-gray-100 h-[100dvh] flex flex-col items-center justify-center p-4 sm:p-8">
 
-    <div class="bg-white shadow-lg rounded-2xl p-6 w-full max-w-md">
-        <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">📦 自動同步隨機抽籤系統</h1>
+    <!-- 放大容器：max-w-2xl 讓電腦版更寬闊，p-8 sm:p-12 增加內部留白 -->
+    <div class="bg-gray-800 border border-gray-700 shadow-2xl rounded-3xl p-6 sm:p-10 w-full max-w-2xl flex flex-col justify-between max-h-[94vh]">
+        
+        <!-- 標題 -->
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-center text-indigo-400 mb-6 sm:mb-8 tracking-wide">📦 隨機抽籤系統</h1>
 
         <!-- 選擇 JSON 檔案下拉選單 -->
-        <div class="mb-4">
-            <label for="jsonSelect" class="block text-sm font-medium text-gray-700 mb-1">選擇抽選清單：</label>
-            <select id="jsonSelect" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <div class="mb-5 sm:mb-8">
+            <label for="jsonSelect" class="block text-sm sm:text-base font-semibold text-gray-300 mb-2">選擇抽選清單：</label>
+            <select id="jsonSelect" class="w-full bg-gray-900 border border-gray-600 rounded-2xl p-4 sm:p-5 text-base sm:text-lg text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
                 <option value="">載入清單中...</option>
             </select>
         </div>
 
         <!-- 剩餘數量顯示 -->
-        <div class="text-sm text-gray-500 mb-6 text-right">
-            剩餘可抽數量：<span id="remainingCount" class="font-bold text-blue-600">0</span> / <span id="totalCount">0</span>
+        <div class="text-sm sm:text-base text-gray-400 mb-5 sm:mb-8 text-right font-medium">
+            剩餘可抽數量：<span id="remainingCount" class="font-bold text-indigo-400 text-base sm:text-lg">0</span> / <span id="totalCount" class="text-base sm:text-lg">0</span>
         </div>
 
         <!-- 抽籤結果顯示區 -->
-        <div id="resultBox" class="bg-blue-50 border border-blue-200 rounded-xl p-6 text-center mb-6 hidden">
-            <p class="text-sm text-blue-600 font-medium mb-1">🎉 抽中結果 🎉</p>
-            <p class="text-lg text-gray-700">箱子：<span id="resultBoxNum" class="font-bold text-xl text-blue-900">-</span></p>
-            <p class="text-xl font-bold text-blue-800 mt-1">品項：<span id="resultItem">-</span></p>
+        <div id="resultBox" class="bg-gray-900/90 border border-indigo-500/40 rounded-2xl p-6 sm:p-8 text-center mb-5 sm:mb-8 hidden shadow-inner">
+            <p class="text-sm sm:text-base text-indigo-400 font-semibold mb-2 tracking-wider uppercase">🎉 抽中結果 🎉</p>
+            <p class="text-lg sm:text-xl text-gray-300">箱子：<span id="resultBoxNum" class="font-bold text-2xl sm:text-3xl text-white">-</span></p>
+            <p class="text-2xl sm:text-3xl font-black text-indigo-300 mt-2">品項：<span id="resultItem">-</span></p>
         </div>
 
         <!-- 按鈕區 -->
-        <div class="flex gap-3">
-            <button id="drawBtn" onclick="drawItem()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition shadow-md">
+        <div class="flex gap-4 mt-auto">
+            <button id="drawBtn" onclick="drawItem()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold py-4 sm:py-5 px-6 rounded-2xl transition shadow-lg text-lg sm:text-xl">
                 開始抽籤
             </button>
-            <button onclick="resetState()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 px-4 rounded-xl transition">
-                重置 (Reset)
+            <button onclick="resetState()" class="bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-gray-200 font-semibold py-4 sm:py-5 px-6 rounded-2xl transition text-base sm:text-lg">
+                重置
             </button>
         </div>
+
     </div>
 
     <script>
-        // ================= 請修改這裡 =================
-        const GITHUB_USER = "gamania31610";   // 例如: "your-username"
-        const REPO_NAME = "Random-Picker";      // 你的 Repo 名稱
-        // ==============================================
+        // ================= 設定區域 =================
+        const GITHUB_USER = "gamania31610";
+        const REPO_NAME = "Random-Picker";
+        // ===========================================
 
         let currentData = []; 
         const jsonSelect = document.getElementById('jsonSelect');
@@ -59,20 +73,17 @@
 
         jsonSelect.addEventListener('change', loadSelectedJSON);
 
-        // 頁面初次載入：先去 GitHub 抓取資料夾檔案列表
         window.onload = async function() {
             await fetchFileList();
         };
 
-        // 1. 自動從 GitHub API 抓取 JSON/ 資料夾底下的檔案
         async function fetchFileList() {
-            const apiUlr = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/JSON`;
+            const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/JSON`;
             try {
-                const response = await fetch(apiUlr);
+                const response = await fetch(apiUrl);
                 if (!response.ok) throw new Error('無法取得 GitHub 資料夾列表');
                 const files = await response.json();
 
-                // 過濾出 .json 檔案
                 const jsonFiles = files.filter(file => file.type === 'file' && file.name.endsWith('.json'));
 
                 if (jsonFiles.length === 0) {
@@ -80,26 +91,23 @@
                     return;
                 }
 
-                // 動態建立下拉選單
                 jsonSelect.innerHTML = '';
-                jsonFiles.forEach((file, index) => {
+                jsonFiles.forEach((file) => {
                     const fileNameWithoutExt = file.name.replace('.json', '');
                     const option = document.createElement('option');
                     option.value = fileNameWithoutExt;
-                    option.textContent = fileNameWithoutExt; // 不顯示副檔名
+                    option.textContent = fileNameWithoutExt;
                     jsonSelect.appendChild(option);
                 });
 
-                // 載入預設第一個檔案
                 loadSelectedJSON();
 
             } catch (error) {
                 console.error(error);
-                jsonSelect.innerHTML = '<option value="">載入清單失敗 (請檢查帳號與 Repo 設定)</option>';
+                jsonSelect.innerHTML = '<option value="">載入清單失敗 (請確認 Repo 狀態)</option>';
             }
         }
 
-        // 2. 讀取選定的 JSON 檔案並與 localStorage 進行智慧比對
         async function loadSelectedJSON() {
             const fileName = jsonSelect.value;
             if (!fileName) return;
@@ -108,8 +116,7 @@
             const url = `./JSON/${fileName}.json`;
 
             try {
-                // 抓取 GitHub 上的最新原始 JSON 內容
-                const response = await fetch(url + '?t=' + new Date().getTime()); // 加亂數避免瀏覽器快取
+                const response = await fetch(url + '?t=' + new Date().getTime());
                 if (!response.ok) throw new Error('讀取 JSON 失敗');
                 const rawData = await response.json();
 
@@ -117,16 +124,12 @@
                 const savedStateJson = localStorage.getItem(storageKey);
 
                 if (savedStateJson) {
-                    // 如果有舊記錄，進行「智慧同步合併」
                     const savedState = JSON.parse(savedStateJson);
-                    
-                    // 建立一個對照表紀錄舊的抽過狀態：Key 用 "箱子_品項"
                     const statusMap = {};
                     savedState.forEach(item => {
                         statusMap[`${item.箱子}_${item.品項}`] = item.被抽過;
                     });
 
-                    // 用最新的 rawData 重新對齊，保留舊的抽過狀態，並自動引入新增的項目
                     currentData = rawData.map(newItem => {
                         const key = `${newItem.箱子}_${newItem.品項}`;
                         return {
@@ -135,7 +138,6 @@
                         };
                     });
                 } else {
-                    // 首次載入：全部初始化為未被抽過
                     currentData = rawData.map(item => ({
                         ...item,
                         被抽過: false
@@ -169,12 +171,12 @@
 
             if (remaining === 0 && total > 0) {
                 drawBtn.textContent = "已抽完 (將自動重置)";
-                drawBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
-                drawBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                drawBtn.classList.add('bg-gray-600', 'cursor-not-allowed');
+                drawBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-500', 'active:bg-indigo-700');
             } else {
                 drawBtn.textContent = "開始抽籤";
-                drawBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
-                drawBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                drawBtn.classList.remove('bg-gray-600', 'cursor-not-allowed');
+                drawBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-500', 'active:bg-indigo-700');
             }
         }
 
