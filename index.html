@@ -22,27 +22,28 @@
 
     <div class="bg-gray-800 border border-gray-700 shadow-2xl rounded-3xl p-6 sm:p-10 w-full max-w-2xl flex flex-col justify-between max-h-[94vh]">
         
-        <!-- 標題 -->
-        <h1 class="text-3xl sm:text-4xl font-extrabold text-center text-indigo-400 mb-6 sm:mb-8 tracking-wide">📦 隨機抽籤系統</h1>
+        <!-- 標題與更新時間置頂區 -->
+        <div class="text-center mb-5 sm:mb-7">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-indigo-400 tracking-wide mb-1.5">📦 隨機抽籤系統</h1>
+            <!-- 獨立到新位置的副標題：完整顯示到秒數 -->
+            <p id="updateTime" class="text-xs sm:text-sm text-gray-400 italic">更新時間：載入中...</p>
+        </div>
 
         <!-- 選擇 JSON 檔案下拉選單 -->
-        <div class="mb-5 sm:mb-8">
+        <div class="mb-5 sm:mb-7">
             <label for="jsonSelect" class="block text-sm sm:text-base font-semibold text-gray-300 mb-2">選擇抽選清單：</label>
             <select id="jsonSelect" class="w-full bg-gray-900 border border-gray-600 rounded-2xl p-4 sm:p-5 text-base sm:text-lg text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
                 <option value="">載入清單中...</option>
             </select>
         </div>
 
-        <!-- 剩餘數量與最後更新時間顯示區 -->
-        <div class="flex justify-between items-center text-xs sm:text-sm text-gray-400 mb-5 sm:mb-8 font-medium">
-            <span id="updateTime" class="text-gray-500 italic">更新時間：載入中...</span>
-            <div>
-                剩餘可抽數量：<span id="remainingCount" class="font-bold text-indigo-400 text-base sm:text-lg">0</span> / <span id="totalCount" class="text-base sm:text-lg">0</span>
-            </div>
+        <!-- 剩餘數量顯示 -->
+        <div class="text-xs sm:text-sm text-gray-400 mb-5 sm:mb-7 text-right font-medium">
+            剩餘可抽數量：<span id="remainingCount" class="font-bold text-indigo-400 text-base sm:text-lg">0</span> / <span id="totalCount" class="text-base sm:text-lg">0</span>
         </div>
 
         <!-- 抽籤結果顯示區 -->
-        <div id="resultBox" class="bg-gray-900/90 border border-indigo-500/40 rounded-2xl p-6 sm:p-8 text-center mb-5 sm:mb-8 hidden shadow-inner">
+        <div id="resultBox" class="bg-gray-900/90 border border-indigo-500/40 rounded-2xl p-6 sm:p-8 text-center mb-5 sm:mb-7 hidden shadow-inner">
             <p class="text-sm sm:text-base text-indigo-400 font-semibold mb-2 tracking-wider uppercase">🎉 抽中結果 🎉</p>
             <p class="text-2xl sm:text-3xl font-bold text-white mb-2">箱子：<span id="resultBoxNum" class="font-bold text-white">-</span></p>
             <p class="text-2xl sm:text-3xl font-black text-indigo-300">品項：<span id="resultItem">-</span></p>
@@ -219,12 +220,14 @@
                 let displayTime = '';
                 if (lastModifiedHeader) {
                     const dateObj = new Date(lastModifiedHeader);
+                    // 這裡加上了 hour: '2-digit', minute: '2-digit', second: '2-digit' 完整顯示到秒數
                     displayTime = dateObj.toLocaleString('zh-TW', { 
                         year: 'numeric', 
                         month: '2-digit', 
                         day: '2-digit', 
                         hour: '2-digit', 
                         minute: '2-digit',
+                        second: '2-digit',
                         hour12: false 
                     });
                 } else {
