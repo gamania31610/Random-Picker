@@ -13,6 +13,8 @@
             height: 100%;
             overflow: hidden;
             touch-action: manipulation;
+            user-select: none; /* 防止長按時選取文字 */
+            -webkit-user-select: none;
         }
     </style>
 </head>
@@ -48,7 +50,8 @@
             <button id="drawBtn" onclick="drawItem()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold py-4 sm:py-5 px-6 rounded-2xl transition shadow-lg text-lg sm:text-xl">
                 開始抽籤
             </button>
-            <button onclick="confirmReset()" class="bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-gray-200 font-semibold py-4 sm:py-5 px-6 rounded-2xl transition text-base sm:text-lg">
+            <!-- 支援點擊重置、長按設定 Token 的按鈕 -->
+            <button id="resetBtn" class="bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-gray-200 font-semibold py-4 sm:py-5 px-6 rounded-2xl transition text-base sm:text-lg relative overflow-hidden">
                 重置
             </button>
         </div>
@@ -83,18 +86,103 @@
         const resultBoxNum = document.getElementById('resultBoxNum');
         const resultItem = document.getElementById('resultItem');
         const drawBtn = document.getElementById('drawBtn');
+        const resetBtn = document.getElementById('resetBtn');
 
         jsonSelect.addEventListener('change', loadSelectedJSON);
+
+        // ================= 綁定重置按鈕的「點擊」與「長按」事件 =================
+        let pressTimer = null;
+        const LONG_PRESS_TIME = 1500; // 1.5 秒視為長按
+
+        // 滑鼠/觸控按下開始計時
+        function startPress(e) {
+            e.preventDefault();
+            pressTimer = setTimeout(() => {
+                pressTimer = null;
+                openTokenModal(); // 觸發長按設定 GitHub Token
+            }, LONG_PRESS_TIME);
+        }
+
+        // 放開或中斷時取消計時
+        function cancelPress() {
+            if (pressTimer) {
+                clearTimeout(pressTimer);
+                pressTimer = null;
+            }
+        }
+
+        // 一般點擊事件
+        resetBtn.addEventListener('click', (e) => {
+            // 如果剛才觸發了長按，則不執行點擊重置
+            if (!pressTimer && window.wasLongPressed) {
+                window.wasLongPressed = false;
+                return;
+            }
+            confirmReset(false);
+        });
+
+        // 綁定滑鼠事件
+        resetBtn.addEventListener('mousedown', startPress);
+        resetBtn.addEventListener('mouseup', cancelPress);
+        resetBtn.addEventListener('mouseleave', cancelPress);
+
+        // 綁定手機觸控事件
+        resetBtn.addEventListener('touchstart', startPress, { passive: false });
+        resetBtn.addEventListener('touchend', cancelPress);
+        resetBtn.addEventListener('touchcancel', cancelPress);
+
+        // 彈出 Token 設定視窗
+        function openTokenModal() {
+            window.wasLongPressed = true;
+            const currentToken = localStorage.getItem('github_pat_token') || '';
+            const newToken = prompt(
+                "⚙️ 【GitHub API 權杖設定】\n\n" +
+                "輸入你的 Personal Access Token (PAT) 以解除 API 頻率限制。\n" +
+                "若要清除權杖，請直接清空輸入框並按確定。", 
+                currentToken
+            );
+
+            if (newToken !== null) {
+                const trimmed = newToken.trim();
+                if (trimmed === "") {
+                    localStorage.removeItem('github_pat_token');
+                    alert("已清除 GitHub 權杖，恢復匿名請求模式。");
+                } else {
+                    localStorage.setItem('github_pat_token', trimmed);
+                    alert("GitHub 權杖儲存成功！");
+                }
+                // 重新載入檔案清單
+                fetchFileList();
+            }
+        }
+        // ===================================================================
 
         window.onload = async function() {
             await fetchFileList();
         };
 
+        // 取得 GitHub API 請求標頭（若有 Token 自動夾帶）
+        function getGitHubHeaders() {
+            const token = localStorage.getItem('github_pat_token');
+            const headers = {
+                'Accept': 'application/vnd.github.v3+json'
+            };
+            if (token) {
+                headers['Authorization'] = `token ${token}`;
+            }
+            return headers;
+        }
+
         async function fetchFileList() {
             const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/JSON`;
             try {
-                const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error('無法取得 GitHub 資料夾列表');
+                const response = await fetch(apiUrl, { headers: getGitHubHeaders() });
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                        throw new Error('API 權限不足或次數超限 (請長按重置鈕設定 GitHub Token)');
+                    }
+                    throw new Error('無法取得 GitHub 資料夾列表');
+                }
                 const files = await response.json();
 
                 const jsonFiles = files.filter(file => file.type === 'file' && file.name.endsWith('.json'));
@@ -117,7 +205,7 @@
 
             } catch (error) {
                 console.error(error);
-                jsonSelect.innerHTML = '<option value="">載入清單失敗 (請確認 Repo 狀態)</option>';
+                jsonSelect.innerHTML = `<option value="">${error.message || '載入清單失敗'}</option>`;
             }
         }
 
@@ -129,7 +217,7 @@
             const url = `./JSON/${fileName}.json`;
 
             try {
-                const response = await fetch(url + '?t=' + new Date().getTime());
+                const response = await fetch(url + '?t=' + new Date().getTime(), { headers: getGitHubHeaders() });
                 if (!response.ok) throw new Error('讀取 JSON 失敗');
                 const rawData = await response.json();
 
@@ -197,7 +285,7 @@
             const availableItems = currentData.filter(item => !item.被抽過);
 
             if (availableItems.length === 0) {
-                confirmReset(true); // 自動重置時直接執行
+                confirmReset(true); 
                 return;
             }
 
@@ -217,7 +305,6 @@
             resultBox.classList.remove('hidden');
         }
 
-        // 手動點擊重置按鈕時先跳出確認框（isAuto 代表是否為抽完自動觸發）
         function confirmReset(isAuto = false) {
             const fileName = jsonSelect.value;
             if (!isAuto) {
