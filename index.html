@@ -25,7 +25,7 @@
         <!-- 標題與更新時間置頂區 -->
         <div class="text-center mb-5 sm:mb-7">
             <h1 class="text-3xl sm:text-4xl font-extrabold text-indigo-400 tracking-wide mb-1.5">📦 隨機抽籤系統</h1>
-            <!-- 獨立到新位置的副標題：完整顯示到秒數 -->
+            <!-- 完整顯示到秒數的更新時間 -->
             <p id="updateTime" class="text-xs sm:text-sm text-gray-400 italic">更新時間：載入中...</p>
         </div>
 
@@ -57,6 +57,7 @@
             <!-- 支援點擊重置、長按設定 Token 的按鈕 -->
             <button id="resetBtn" class="bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-gray-200 font-semibold py-4 sm:py-5 px-6 rounded-2xl transition text-base sm:text-lg relative overflow-hidden">
                 重置
+                <div class="hold-progress" id="holdProgress" style="position: absolute; bottom: 0; left: 0; height: 3px; background-color: #f87171; width: 0%; transition: width 0.05s linear;"></div>
             </button>
         </div>
 
@@ -68,20 +69,8 @@
         const REPO_NAME = "Random-Picker";
         // ===========================================
 
-        // 手機切換分頁回來（變為畫面可見）時自動重整
-        document.addEventListener('visibilitychange', function() {
-            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-            if (isMobile && document.visibilityState === 'visible') {
-                if (!sessionStorage.getItem('is_reloaded_from_hidden')) {
-                    sessionStorage.setItem('is_reloaded_from_hidden', 'true');
-                    window.location.reload();
-                }
-            } else if (document.visibilityState === 'hidden') {
-                sessionStorage.removeItem('is_reloaded_from_hidden');
-            }
-        });
-
         let currentData = []; 
+        let isFetching = false;
         const jsonSelect = document.getElementById('jsonSelect');
         const remainingCountEl = document.getElementById('remainingCount');
         const totalCountEl = document.getElementById('totalCount');
@@ -91,46 +80,59 @@
         const resultItem = document.getElementById('resultItem');
         const drawBtn = document.getElementById('drawBtn');
         const resetBtn = document.getElementById('resetBtn');
+        const holdProgressEl = document.getElementById('holdProgress');
 
         jsonSelect.addEventListener('change', loadSelectedJSON);
 
         // ================= 綁定重置按鈕的「點擊」與「長按」事件 =================
-        let pressTimer = null;
-        const LONG_PRESS_TIME = 1500; // 1.5 秒視為長按
+        let holdTimer = null;
+        let progressInterval = null;
+        const HOLD_DURATION = 1200;
+        let startTime = 0;
 
-        function startPress(e) {
-            e.preventDefault();
-            pressTimer = setTimeout(() => {
-                pressTimer = null;
+        function startHold(e) {
+            startTime = Date.now();
+            holdProgressEl.style.width = '0%';
+
+            progressInterval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const percent = Math.min((elapsed / HOLD_DURATION) * 100, 100);
+                holdProgressEl.style.width = percent + '%';
+            }, 30);
+
+            holdTimer = setTimeout(() => {
+                cancelHold();
                 openTokenModal();
-            }, LONG_PRESS_TIME);
+            }, HOLD_DURATION);
         }
 
-        function cancelPress() {
-            if (pressTimer) {
-                clearTimeout(pressTimer);
-                pressTimer = null;
+        function cancelHold() {
+            if (holdTimer) {
+                clearTimeout(holdTimer);
+                holdTimer = null;
             }
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+            holdProgressEl.style.width = '0%';
         }
 
         resetBtn.addEventListener('click', (e) => {
-            if (!pressTimer && window.wasLongPressed) {
-                window.wasLongPressed = false;
-                return;
-            }
             confirmReset(false);
         });
 
-        resetBtn.addEventListener('mousedown', startPress);
-        resetBtn.addEventListener('mouseup', cancelPress);
-        resetBtn.addEventListener('mouseleave', cancelPress);
+        resetBtn.addEventListener('mousedown', startHold);
+        resetBtn.addEventListener('mouseup', cancelHold);
+        resetBtn.addEventListener('mouseleave', cancelHold);
 
-        resetBtn.addEventListener('touchstart', startPress, { passive: false });
-        resetBtn.addEventListener('touchend', cancelPress);
-        resetBtn.addEventListener('touchcancel', cancelPress);
+        resetBtn.addEventListener('touchstart', (e) => {
+            startHold(e);
+        }, { passive: true });
+        resetBtn.addEventListener('touchend', cancelHold);
+        resetBtn.addEventListener('touchcancel', cancelHold);
 
         function openTokenModal() {
-            window.wasLongPressed = true;
             const currentToken = localStorage.getItem('github_pat_token') || '';
             const newToken = prompt(
                 "⚙️ 【GitHub API 權杖設定】\n\n" +
@@ -162,13 +164,16 @@
             const headers = {
                 'Accept': 'application/vnd.github.v3+json'
             };
-            if (token) {
-                headers['Authorization'] = `token ${token}`;
+            if (token && token.trim() !== '') {
+                headers['Authorization'] = `token ${token.trim()}`;
             }
             return headers;
         }
 
         async function fetchFileList() {
+            if (isFetching) return;
+            isFetching = true;
+            
             const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/JSON`;
             try {
                 const response = await fetch(apiUrl, { headers: getGitHubHeaders() });
@@ -184,8 +189,12 @@
 
                 if (jsonFiles.length === 0) {
                     jsonSelect.innerHTML = '<option value="">JSON 資料夾內沒有找到檔案</option>';
+                    isFetching = false;
                     return;
                 }
+
+                // 記住目前選中的項目（如果有的話）
+                const currentSelected = jsonSelect.value;
 
                 jsonSelect.innerHTML = '';
                 jsonFiles.forEach((file) => {
@@ -196,11 +205,18 @@
                     jsonSelect.appendChild(option);
                 });
 
-                loadSelectedJSON();
+                // 若原本有選過且清單還在，就維持選中；否則預設選第一個
+                if (currentSelected && [...jsonSelect.options].some(opt => opt.value === currentSelected)) {
+                    jsonSelect.value = currentSelected;
+                }
+
+                await loadSelectedJSON();
 
             } catch (error) {
                 console.error(error);
                 jsonSelect.innerHTML = `<option value="">${error.message || '載入清單失敗'}</option>`;
+            } finally {
+                isFetching = false;
             }
         }
 
@@ -220,7 +236,6 @@
                 let displayTime = '';
                 if (lastModifiedHeader) {
                     const dateObj = new Date(lastModifiedHeader);
-                    // 這裡加上了 hour: '2-digit', minute: '2-digit', second: '2-digit' 完整顯示到秒數
                     displayTime = dateObj.toLocaleString('zh-TW', { 
                         year: 'numeric', 
                         month: '2-digit', 
@@ -231,7 +246,8 @@
                         hour12: false 
                     });
                 } else {
-                    displayTime = new Date().toLocaleString('zh-TW', { hour12: false });
+                    const now = new Date();
+                    displayTime = now.toLocaleString('zh-TW', { hour12: false });
                 }
                 
                 updateTimeEl.textContent = `更新時間：${displayTime}`;
@@ -344,6 +360,33 @@
             updateUI();
             resultBox.classList.add('hidden');
         }
+
+        // ================= 強固型多重事件觸發重整機制 =================
+        let lastRefreshTime = 0;
+        function triggerRefresh() {
+            const now = Date.now();
+            // 2 秒內防連點節流保護，避免重複刷新
+            if (now - lastRefreshTime > 2000) {
+                lastRefreshTime = now;
+                fetchFileList();
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                triggerRefresh();
+            }
+        });
+
+        window.addEventListener('focus', () => {
+            triggerRefresh();
+        });
+
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) {
+                triggerRefresh();
+            }
+        });
     </script>
 </body>
 </html>
