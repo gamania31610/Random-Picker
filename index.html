@@ -18,7 +18,6 @@
 </head>
 <body class="bg-gray-900 text-gray-100 h-[100dvh] flex flex-col items-center justify-center p-4 sm:p-8">
 
-    <!-- 放大容器：max-w-2xl 讓電腦版更寬闊，p-8 sm:p-12 增加內部留白 -->
     <div class="bg-gray-800 border border-gray-700 shadow-2xl rounded-3xl p-6 sm:p-10 w-full max-w-2xl flex flex-col justify-between max-h-[94vh]">
         
         <!-- 標題 -->
@@ -61,6 +60,21 @@
         const GITHUB_USER = "gamania31610";
         const REPO_NAME = "Random-Picker";
         // ===========================================
+
+        // 每次進入網站自動重整機制（確保抓到最新檔案與避免快取）
+        window.addEventListener('pageshow', function(event) {
+            // 檢查是否為從瀏覽器快取（bfcache）恢復的頁面，或是全新進入
+            const isReloaded = sessionStorage.getItem('has_reloaded');
+            if (!isReloaded) {
+                sessionStorage.setItem('has_reloaded', 'true');
+                window.location.reload();
+            }
+        });
+
+        // 離開頁面或關閉時清除標記，確保下次進來時會再次觸發重整
+        window.addEventListener('beforeunload', function() {
+            sessionStorage.removeItem('has_reloaded');
+        });
 
         let currentData = []; 
         const jsonSelect = document.getElementById('jsonSelect');
