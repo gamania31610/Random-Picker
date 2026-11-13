@@ -64,21 +64,19 @@
         const REPO_NAME = "Random-Picker";
         // ===========================================
 
-        // ==========================================
-        // 手機切換分頁或回到 App 時，無條件自動重新整理抓取
-        // ==========================================
-        window.addEventListener('pageshow', () => {
-          init();
-        });
-
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') {
-            init();
-          }
-        });
-
-        window.addEventListener('focus', () => {
-          init();
+        // 手機切換分頁回來（變為畫面可見）時自動重整
+        document.addEventListener('visibilitychange', function() {
+            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if (isMobile && document.visibilityState === 'visible') {
+                // 用 sessionStorage 避免在同一次切換中無限重整
+                if (!sessionStorage.getItem('is_reloaded_from_hidden')) {
+                    sessionStorage.setItem('is_reloaded_from_hidden', 'true');
+                    window.location.reload();
+                }
+            } else if (document.visibilityState === 'hidden') {
+                // 離開分頁時重置狀態，以便下次切回來時能再次觸發
+                sessionStorage.removeItem('is_reloaded_from_hidden');
+            }
         });
 
         let currentData = []; 
