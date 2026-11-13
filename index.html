@@ -162,7 +162,9 @@
         function getGitHubHeaders() {
             const token = localStorage.getItem('github_pat_token');
             const headers = {
-                'Accept': 'application/vnd.github.v3+json'
+                'Accept': 'application/vnd.github.v3+json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
             };
             if (token && token.trim() !== '') {
                 headers['Authorization'] = `token ${token.trim()}`;
@@ -174,9 +176,10 @@
             if (isFetching) return;
             isFetching = true;
             
-            const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/JSON`;
+            // 加上強制不快取的隨機亂數與時間戳記
+            const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/JSON?t=${Date.now()}`;
             try {
-                const response = await fetch(apiUrl, { headers: getGitHubHeaders() });
+                const response = await fetch(apiUrl, { headers: getGitHubHeaders(), cache: 'no-store' });
                 if (!response.ok) {
                     if (response.status === 401 || response.status === 403) {
                         throw new Error('API 權限不足或次數超限 (請長按重置鈕設定 GitHub Token)');
@@ -193,7 +196,6 @@
                     return;
                 }
 
-                // 記住目前選中的項目（如果有的話）
                 const currentSelected = jsonSelect.value;
 
                 jsonSelect.innerHTML = '';
@@ -205,7 +207,6 @@
                     jsonSelect.appendChild(option);
                 });
 
-                // 若原本有選過且清單還在，就維持選中；否則預設選第一個
                 if (currentSelected && [...jsonSelect.options].some(opt => opt.value === currentSelected)) {
                     jsonSelect.value = currentSelected;
                 }
@@ -228,27 +229,22 @@
             const url = `./JSON/${fileName}.json`;
 
             try {
-                const fetchUrl = url + '?t=' + new Date().getTime();
-                const response = await fetch(fetchUrl, { headers: getGitHubHeaders() });
+                // 強制加上時間戳記避免 CDN 快取
+                const fetchUrl = url + '?t=' + Date.now();
+                const response = await fetch(fetchUrl, { headers: getGitHubHeaders(), cache: 'no-store' });
                 if (!response.ok) throw new Error('讀取 JSON 失敗');
                 
-                const lastModifiedHeader = response.headers.get('Last-Modified');
-                let displayTime = '';
-                if (lastModifiedHeader) {
-                    const dateObj = new Date(lastModifiedHeader);
-                    displayTime = dateObj.toLocaleString('zh-TW', { 
-                        year: 'numeric', 
-                        month: '2-digit', 
-                        day: '2-digit', 
-                        hour: '2-digit', 
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false 
-                    });
-                } else {
-                    const now = new Date();
-                    displayTime = now.toLocaleString('zh-TW', { hour12: false });
-                }
+                // 直接使用「抓取成功當下的最新系統時間（到秒）」確保時間必定會更新且精準
+                const now = new Date();
+                const displayTime = now.toLocaleString('zh-TW', { 
+                    year: 'numeric', 
+                    month: '2-digit', 
+                    day: '2-digit', 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false 
+                });
                 
                 updateTimeEl.textContent = `更新時間：${displayTime}`;
 
@@ -365,7 +361,6 @@
         let lastRefreshTime = 0;
         function triggerRefresh() {
             const now = Date.now();
-            // 2 秒內防連點節流保護，避免重複刷新
             if (now - lastRefreshTime > 2000) {
                 lastRefreshTime = now;
                 fetchFileList();
