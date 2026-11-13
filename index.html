@@ -39,8 +39,10 @@
         <!-- 抽籤結果顯示區 -->
         <div id="resultBox" class="bg-gray-900/90 border border-indigo-500/40 rounded-2xl p-6 sm:p-8 text-center mb-5 sm:mb-8 hidden shadow-inner">
             <p class="text-sm sm:text-base text-indigo-400 font-semibold mb-2 tracking-wider uppercase">🎉 抽中結果 🎉</p>
-            <p class="text-lg sm:text-xl text-gray-300">箱子：<span id="resultBoxNum" class="font-bold text-2xl sm:text-3xl text-white">-</span></p>
-            <p class="text-2xl sm:text-3xl font-black text-indigo-300 mt-2">品項：<span id="resultItem">-</span></p>
+            <!-- 調整此處的文字，讓「箱子：」與編號大小一致 -->
+            <p class="text-2xl sm:text-3xl font-bold text-white mb-2">箱子：<span id="resultBoxNum" class="font-bold text-white">-</span></p>
+            <!-- 調整此處的文字，讓「品項：」與品項名稱大小一致 -->
+            <p class="text-2xl sm:text-3xl font-black text-indigo-300">品項：<span id="resultItem">-</span></p>
         </div>
 
         <!-- 按鈕區 -->
@@ -61,14 +63,13 @@
         const REPO_NAME = "Random-Picker";
         // ===========================================
 
-        // 僅針對「手機版」進行一次性防快取重整（使用嚴格的安全鎖判定，絕不循環）
+        // 僅針對「手機版」進行一次性防快取重整
         (function() {
             const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
             if (isMobile) {
                 const navEntries = performance.getEntriesByType("navigation");
                 const navType = navEntries.length > 0 ? navEntries[0].type : '';
                 
-                // 如果是透過直接點擊或輸入網址進入，且尚未重整過
                 if (navType === 'navigate' && !sessionStorage.getItem('mobile_refreshed')) {
                     sessionStorage.setItem('mobile_refreshed', 'true');
                     window.location.replace(window.location.href + '?t=' + Date.now());
@@ -130,7 +131,6 @@
             const url = `./JSON/${fileName}.json`;
 
             try {
-                // 每次抓取 JSON 時加上時間戳記防止快取
                 const response = await fetch(url + '?t=' + new Date().getTime());
                 if (!response.ok) throw new Error('讀取 JSON 失敗');
                 const rawData = await response.json();
