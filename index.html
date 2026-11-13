@@ -61,20 +61,20 @@
         const REPO_NAME = "Random-Picker";
         // ===========================================
 
-        // 每次進入網站自動重整機制（確保抓到最新檔案與避免快取）
-        window.addEventListener('pageshow', function(event) {
-            // 檢查是否為從瀏覽器快取（bfcache）恢復的頁面，或是全新進入
-            const isReloaded = sessionStorage.getItem('has_reloaded');
-            if (!isReloaded) {
-                sessionStorage.setItem('has_reloaded', 'true');
-                window.location.reload();
+        // 僅針對「手機版」進行一次性防快取重整（使用嚴格的安全鎖判定，絕不循環）
+        (function() {
+            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if (isMobile) {
+                const navEntries = performance.getEntriesByType("navigation");
+                const navType = navEntries.length > 0 ? navEntries[0].type : '';
+                
+                // 如果是透過直接點擊或輸入網址進入，且尚未重整過
+                if (navType === 'navigate' && !sessionStorage.getItem('mobile_refreshed')) {
+                    sessionStorage.setItem('mobile_refreshed', 'true');
+                    window.location.replace(window.location.href + '?t=' + Date.now());
+                }
             }
-        });
-
-        // 離開頁面或關閉時清除標記，確保下次進來時會再次觸發重整
-        window.addEventListener('beforeunload', function() {
-            sessionStorage.removeItem('has_reloaded');
-        });
+        })();
 
         let currentData = []; 
         const jsonSelect = document.getElementById('jsonSelect');
@@ -130,6 +130,7 @@
             const url = `./JSON/${fileName}.json`;
 
             try {
+                // 每次抓取 JSON 時加上時間戳記防止快取
                 const response = await fetch(url + '?t=' + new Date().getTime());
                 if (!response.ok) throw new Error('讀取 JSON 失敗');
                 const rawData = await response.json();
