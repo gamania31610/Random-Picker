@@ -67,6 +67,7 @@
         // ================= 設定區域 =================
         const GITHUB_USER = "gamania31610";
         const REPO_NAME = "Random-Picker";
+        const TARGET_FOLDER = "JSON/"; // 動態掃描此資料夾底下的 json 檔
         // ===========================================
 
         let currentData = []; 
@@ -161,34 +162,47 @@
 
         function getGitHubHeaders() {
             const token = localStorage.getItem('github_pat_token');
-            const headers = {
-                'Accept': 'application/vnd.github.v3+json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache'
-            };
+            const headers = {};
             if (token && token.trim() !== '') {
-                headers['Authorization'] = `token ${token.trim()}`;
+                headers['Authorization'] = `Bearer ${token.trim()}`;
             }
             return headers;
         }
 
+        // 使用 Git Trees API 動態取得清單，完全不受 60 次限制與 contents 快取影響
         async function fetchFileList() {
             if (isFetching) return;
             isFetching = true;
             
-            // 加上強制不快取的隨機亂數與時間戳記
-            const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/JSON?t=${Date.now()}`;
+            const timestamp = Date.now();
+            const headers = getGitHubHeaders();
+
             try {
-                const response = await fetch(apiUrl, { headers: getGitHubHeaders(), cache: 'no-store' });
-                if (!response.ok) {
-                    if (response.status === 401 || response.status === 403) {
+                // 1. 先取得倉庫預設分支
+                const repoRes = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}?t=${timestamp}`, { headers });
+                if (!repoRes.ok) {
+                    if (repoRes.status === 401 || repoRes.status === 403 || repoRes.status === 429) {
                         throw new Error('API 權限不足或次數超限 (請長按重置鈕設定 GitHub Token)');
                     }
-                    throw new Error('無法取得 GitHub 資料夾列表');
+                    throw new Error(`無法取得 Repo 資訊 (HTTP ${repoRes.status})`);
                 }
-                const files = await response.json();
+                const repoData = await repoRes.json();
+                const defaultBranch = repoData.default_branch || 'main';
 
-                const jsonFiles = files.filter(file => file.type === 'file' && file.name.endsWith('.json'));
+                // 2. 利用 Git Trees API 遞迴抓取整個專案目錄
+                const treeRes = await fetch(
+                    `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/git/trees/${defaultBranch}?recursive=1&t=${timestamp}`,
+                    { headers }
+                );
+                if (!treeRes.ok) throw new Error(`無法讀取專案目錄樹 (HTTP ${treeRes.status})`);
+                const treeData = await treeRes.json();
+
+                // 3. 過濾出位於 JSON/ 資料夾底下且結尾是 .json 的檔案
+                const jsonFiles = treeData.tree.filter(item => {
+                    if (item.type !== 'blob') return false;
+                    if (!item.path.startsWith(TARGET_FOLDER)) return false;
+                    return item.path.toLowerCase().endsWith('.json');
+                });
 
                 if (jsonFiles.length === 0) {
                     jsonSelect.innerHTML = '<option value="">JSON 資料夾內沒有找到檔案</option>';
@@ -200,7 +214,9 @@
 
                 jsonSelect.innerHTML = '';
                 jsonFiles.forEach((file) => {
-                    const fileNameWithoutExt = file.name.replace('.json', '');
+                    // file.path 範例: "JSON/weapon.json" -> 提取 "weapon"
+                    const relativePath = file.path.replace(TARGET_FOLDER, '');
+                    const fileNameWithoutExt = relativePath.replace(/\.json$/i, '');
                     const option = document.createElement('option');
                     option.value = fileNameWithoutExt;
                     option.textContent = fileNameWithoutExt;
@@ -229,12 +245,10 @@
             const url = `./JSON/${fileName}.json`;
 
             try {
-                // 強制加上時間戳記避免 CDN 快取
                 const fetchUrl = url + '?t=' + Date.now();
-                const response = await fetch(fetchUrl, { headers: getGitHubHeaders(), cache: 'no-store' });
+                const response = await fetch(fetchUrl, { headers: getGitHubHeaders() });
                 if (!response.ok) throw new Error('讀取 JSON 失敗');
                 
-                // 直接使用「抓取成功當下的最新系統時間（到秒）」確保時間必定會更新且精準
                 const now = new Date();
                 const displayTime = now.toLocaleString('zh-TW', { 
                     year: 'numeric', 
