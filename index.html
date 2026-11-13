@@ -39,9 +39,7 @@
         <!-- 抽籤結果顯示區 -->
         <div id="resultBox" class="bg-gray-900/90 border border-indigo-500/40 rounded-2xl p-6 sm:p-8 text-center mb-5 sm:mb-8 hidden shadow-inner">
             <p class="text-sm sm:text-base text-indigo-400 font-semibold mb-2 tracking-wider uppercase">🎉 抽中結果 🎉</p>
-            <!-- 調整此處的文字，讓「箱子：」與編號大小一致 -->
             <p class="text-2xl sm:text-3xl font-bold text-white mb-2">箱子：<span id="resultBoxNum" class="font-bold text-white">-</span></p>
-            <!-- 調整此處的文字，讓「品項：」與品項名稱大小一致 -->
             <p class="text-2xl sm:text-3xl font-black text-indigo-300">品項：<span id="resultItem">-</span></p>
         </div>
 
@@ -50,7 +48,7 @@
             <button id="drawBtn" onclick="drawItem()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold py-4 sm:py-5 px-6 rounded-2xl transition shadow-lg text-lg sm:text-xl">
                 開始抽籤
             </button>
-            <button onclick="resetState()" class="bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-gray-200 font-semibold py-4 sm:py-5 px-6 rounded-2xl transition text-base sm:text-lg">
+            <button onclick="confirmReset()" class="bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-gray-200 font-semibold py-4 sm:py-5 px-6 rounded-2xl transition text-base sm:text-lg">
                 重置
             </button>
         </div>
@@ -199,8 +197,7 @@
             const availableItems = currentData.filter(item => !item.被抽過);
 
             if (availableItems.length === 0) {
-                resetState();
-                alert('所有品項都已經抽完了！已自動幫您重置所有狀態。');
+                confirmReset(true); // 自動重置時直接執行
                 return;
             }
 
@@ -218,6 +215,19 @@
             resultBoxNum.textContent = selected.箱子;
             resultItem.textContent = selected.品項;
             resultBox.classList.remove('hidden');
+        }
+
+        // 手動點擊重置按鈕時先跳出確認框（isAuto 代表是否為抽完自動觸發）
+        function confirmReset(isAuto = false) {
+            const fileName = jsonSelect.value;
+            if (!isAuto) {
+                if (!confirm(`確定要重置「${fileName}」目前的抽籤進度嗎？`)) {
+                    return;
+                }
+            } else {
+                alert('所有品項都已經抽完了！已自動幫您重置該清單狀態。');
+            }
+            resetState();
         }
 
         function resetState() {
