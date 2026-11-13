@@ -64,19 +64,14 @@
         const REPO_NAME = "Random-Picker";
         // ===========================================
 
-        // 僅針對「手機版」進行一次性防快取重整
-        (function() {
+        // 手機切換分頁或返回時自動重整以確保資料最新
+        window.addEventListener('pageshow', function(event) {
             const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-            if (isMobile) {
-                const navEntries = performance.getEntriesByType("navigation");
-                const navType = navEntries.length > 0 ? navEntries[0].type : '';
-                
-                if (navType === 'navigate' && !sessionStorage.getItem('mobile_refreshed')) {
-                    sessionStorage.setItem('mobile_refreshed', 'true');
-                    window.location.replace(window.location.href + '?t=' + Date.now());
-                }
+            // event.persisted 代表頁面是從快取（bfcache）中恢復的（例如切換分頁回來或按上一頁）
+            if (isMobile && (event.persisted || performance.getEntriesByType("navigation")[0]?.type === 'back_forward')) {
+                window.location.reload();
             }
-        })();
+        });
 
         let currentData = []; 
         const jsonSelect = document.getElementById('jsonSelect');
