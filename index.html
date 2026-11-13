@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自動偵測隨機抽選系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="bg-white shadow-lg rounded-2xl p-6 w-full max-w-md">
+        <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">📦 自動同步隨機抽籤系統</h1>
+
+        <!-- 選擇 JSON 檔案下拉選單 -->
+        <div class="mb-4">
+            <label for="jsonSelect" class="block text-sm font-medium text-gray-700 mb-1">選擇抽選清單：</label>
+            <select id="jsonSelect" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <option value="">載入清單中...</option>
+            </select>
+        </div>
+
+        <!-- 剩餘數量顯示 -->
+        <div class="text-sm text-gray-500 mb-6 text-right">
+            剩餘可抽數量：<span id="remainingCount" class="font-bold text-blue-600">0</span> / <span id="totalCount">0</span>
+        </div>
+
+        <!-- 抽籤結果顯示區 -->
+        <div id="resultBox" class="bg-blue-50 border border-blue-200 rounded-xl p-6 text-center mb-6 hidden">
+            <p class="text-sm text-blue-600 font-medium mb-1">🎉 抽中結果 🎉</p>
+            <p class="text-lg text-gray-700">箱子：<span id="resultBoxNum" class="font-bold text-xl text-blue-900">-</span></p>
+            <p class="text-xl font-bold text-blue-800 mt-1">品項：<span id="resultItem">-</span></p>
+        </div>
+
+        <!-- 按鈕區 -->
+        <div class="flex gap-3">
+            <button id="drawBtn" onclick="drawItem()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition shadow-md">
+                開始抽籤
+            </button>
+            <button onclick="resetState()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 px-4 rounded-xl transition">
+                重置 (Reset)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ================= 請修改這裡 =================
+        const GITHUB_USER = "gamania31610";   // 例如: "your-username"
+        const REPO_NAME = "Random-Picker";      // 你的 Repo 名稱
+        // ==============================================
+
+        let currentData = []; 
+        const jsonSelect = document.getElementById('jsonSelect');
+        const remainingCountEl = document.getElementById('remainingCount');
+        const totalCountEl = document.getElementById('totalCount');
+        const resultBox = document.getElementById('resultBox');
+        const resultBoxNum = document.getElementById('resultBoxNum');
+        const resultItem = document.getElementById('resultItem');
+        const drawBtn = document.getElementById('drawBtn');
+
+        jsonSelect.addEventListener('change', loadSelectedJSON);
+
+        // 頁面初次載入：先去 GitHub 抓取資料夾檔案列表
+        window.onload = async function() {
+            await fetchFileList();
+        };
+
+        // 1. 自動從 GitHub API 抓取 JSON/ 資料夾底下的檔案
+        async function fetchFileList() {
+            const apiUlr = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/JSON`;
+            try {
+                const response = await fetch(apiUlr);
+                if (!response.ok) throw new Error('無法取得 GitHub 資料夾列表');
+                const files = await response.json();
+
+                // 過濾出 .json 檔案
+                const jsonFiles = files.filter(file => file.type === 'file' && file.name.endsWith('.json'));
+
+                if (jsonFiles.length === 0) {
+                    jsonSelect.innerHTML = '<option value="">JSON 資料夾內沒有找到檔案</option>';
+                    return;
+                }
+
+                // 動態建立下拉選單
+                jsonSelect.innerHTML = '';
+                jsonFiles.forEach((file, index) => {
+                    const fileNameWithoutExt = file.name.replace('.json', '');
+                    const option = document.createElement('option');
+                    option.value = fileNameWithoutExt;
+                    option.textContent = fileNameWithoutExt; // 不顯示副檔名
+                    jsonSelect.appendChild(option);
+                });
+
+                // 載入預設第一個檔案
+                loadSelectedJSON();
+
+            } catch (error) {
+                console.error(error);
+                jsonSelect.innerHTML = '<option value="">載入清單失敗 (請檢查帳號與 Repo 設定)</option>';
+            }
+        }
+
+        // 2. 讀取選定的 JSON 檔案並與 localStorage 進行智慧比對
+        async function loadSelectedJSON() {
+            const fileName = jsonSelect.value;
+            if (!fileName) return;
+            
+            resultBox.classList.add('hidden');
+            const url = `./JSON/${fileName}.json`;
+
+            try {
+                // 抓取 GitHub 上的最新原始 JSON 內容
+                const response = await fetch(url + '?t=' + new Date().getTime()); // 加亂數避免瀏覽器快取
+                if (!response.ok) throw new Error('讀取 JSON 失敗');
+                const rawData = await response.json();
+
+                const storageKey = `picker_${fileName}`;
+                const savedStateJson = localStorage.getItem(storageKey);
+
+                if (savedStateJson) {
+                    // 如果有舊記錄，進行「智慧同步合併」
+                    const savedState = JSON.parse(savedStateJson);
+                    
+                    // 建立一個對照表紀錄舊的抽過狀態：Key 用 "箱子_品項"
+                    const statusMap = {};
+                    savedState.forEach(item => {
+                        statusMap[`${item.箱子}_${item.品項}`] = item.被抽過;
+                    });
+
+                    // 用最新的 rawData 重新對齊，保留舊的抽過狀態，並自動引入新增的項目
+                    currentData = rawData.map(newItem => {
+                        const key = `${newItem.箱子}_${newItem.品項}`;
+                        return {
+                            ...newItem,
+                            被抽過: statusMap[key] !== undefined ? statusMap[key] : false
+                        };
+                    });
+                } else {
+                    // 首次載入：全部初始化為未被抽過
+                    currentData = rawData.map(item => ({
+                        ...item,
+                        被抽過: false
+                    }));
+                }
+
+                saveState();
+                updateUI();
+
+            } catch (error) {
+                alert(`無法載入 JSON 檔案：${fileName}.json`);
+                console.error(error);
+                currentData = [];
+                updateUI();
+            }
+        }
+
+        function saveState() {
+            const fileName = jsonSelect.value;
+            if (fileName) {
+                localStorage.setItem(`picker_${fileName}`, JSON.stringify(currentData));
+            }
+        }
+
+        function updateUI() {
+            const total = currentData.length;
+            const remaining = currentData.filter(item => !item.被抽過).length;
+
+            totalCountEl.textContent = total;
+            remainingCountEl.textContent = remaining;
+
+            if (remaining === 0 && total > 0) {
+                drawBtn.textContent = "已抽完 (將自動重置)";
+                drawBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                drawBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            } else {
+                drawBtn.textContent = "開始抽籤";
+                drawBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                drawBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            }
+        }
+
+        function drawItem() {
+            const availableItems = currentData.filter(item => !item.被抽過);
+
+            if (availableItems.length === 0) {
+                resetState();
+                alert('所有品項都已經抽完了！已自動幫您重置所有狀態。');
+                return;
+            }
+
+            const randomIndex = Math.floor(Math.random() * availableItems.length);
+            const selected = availableItems[randomIndex];
+
+            const target = currentData.find(item => item.箱子 === selected.箱子 && item.品項 === selected.品項);
+            if (target) {
+                target.被抽過 = true;
+            }
+
+            saveState();
+            updateUI();
+
+            resultBoxNum.textContent = selected.箱子;
+            resultItem.textContent = selected.品項;
+            resultBox.classList.remove('hidden');
+        }
+
+        function resetState() {
+            currentData = currentData.map(item => ({
+                ...item,
+                被抽過: false
+            }));
+            saveState();
+            updateUI();
+            resultBox.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
